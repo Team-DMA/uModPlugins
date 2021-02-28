@@ -291,6 +291,7 @@
     <Compile Include="src\DronePilot.cs" />
     <Compile Include="src\DroneTrading.cs" />
     <Compile Include="src\Quests.cs" />
+    <Compile Include="src\Story.cs" />
     <Compile Include="src\test.cs" />
     <Compile Include="src\VehicleLicence.cs" />
   </ItemGroup>
