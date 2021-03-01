@@ -32,11 +32,11 @@ namespace Oxide.Plugins
         private static TruePVE Instance;
 
         //Panel for UI
-        private string anchorMin = "0.297 0.03";
-        private string anchorMax = "0.345 0.11";
-        private string color = "1 1 1 1";
-        private string linkImagePve = "https://i.imgur.com/8ILV8oJ.jpg";
-        private string linkImagePvp = "https://i.imgur.com/8ILV8oJ.jpg";
+        private string anchorMin = "0.106 0.005";
+        private string anchorMax = "0.140 0.035";
+        private string color = "0 0 0 0.4";
+        private string linkImagePve = "https://i.imgur.com/qAhCuK2.png";
+        private string linkImagePvp = "https://i.imgur.com/M8Z9gkN.png";
         //
 
 
@@ -745,6 +745,7 @@ namespace Oxide.Plugins
             defaultRuleSet.AddRule("highwalls cannot hurt players");
             defaultRuleSet.AddRule("barricades cannot hurt players");
             defaultRuleSet.AddRule("mini cannot hurt mini");
+            defaultRuleSet.AddRule("npcs can hurt players");
 
             data.ruleSets.Add(defaultRuleSet); // add ruleset to rulesets list
 
@@ -778,38 +779,62 @@ namespace Oxide.Plugins
 
 
         #region UI
-        void OnPlayerSleepEnded(BasePlayer player) => CreateUI(player);
+        void OnPlayerSleepEnded(BasePlayer player) 
+		{
+			//UI
+			if(currentRuleSet.name == "default")
+			{
+				CreateUI(player, false);
+			}
+			else if(currentRuleSet.name == "raid")
+			{
+				CreateUI(player, true);
+			}
+			//
+		}
 
         private const string elem = "pvpPveIndicator";
         private void CreateUI(BasePlayer player, bool pvp = false)
         {
+			//Puts("CreateUI aufgerufen fuer: " + player);
+			
             DestroyGUI(player, elem);
 
             var container = new CuiElementContainer();
+
+			container.Add(new CuiPanel
+            {
+                Image = { Color = color },
+                RectTransform = {
+                    AnchorMin = anchorMin,
+                    AnchorMax = anchorMax
+                },
+                CursorEnabled = false
+            }, "Hud", elem);
 
 
             if(pvp == true)
             {
                 container.Add(new CuiElement
                 {
-                    Name = elem,
+                    Parent = elem,
                     Components =
-                {
-                    new CuiRawImageComponent {Url = linkImagePvp, Color = color},
-                    new CuiRectTransformComponent {AnchorMin = anchorMin, AnchorMax = anchorMax},
-                }
+					{
+						new CuiRawImageComponent {Url = linkImagePvp},
+						new CuiRectTransformComponent {AnchorMin = "0 0", AnchorMax = "1 1"},
+					}
                 });
             }
             else
             {
                 container.Add(new CuiElement
                 {
-                    Name = elem,
+                    Parent = elem,
                     Components =
-                {
-                    new CuiRawImageComponent {Url = linkImagePve, Color = color},
-                    new CuiRectTransformComponent {AnchorMin = anchorMin, AnchorMax = anchorMax},
-                }
+					{
+						new CuiRawImageComponent {Url = linkImagePve},
+						new CuiRectTransformComponent {AnchorMin = "0 0", AnchorMax = "1 1"},
+					}
                 });
             }
 
@@ -996,20 +1021,7 @@ namespace Oxide.Plugins
             RuleSet ruleSet = GetRuleSet(entityLocations, initiatorLocations);
 
             if (trace) Trace($"Using RuleSet \"{ruleSet.name}\"", 1);
-
-            // handle suicide
-            if (hitInfo.damageTypes?.Get(DamageType.Suicide) > 0)
-            {
-                bool flag = ruleSet.HasFlag(RuleFlags.SuicideBlocked);
-                if (trace) Trace($"DamageType is suicide; blocked? { (flag ? "true; block and return" : "false; continue processing") }", 1);
-                if (flag)
-                {
-                    SendMessage(entity as BasePlayer, "Error_NoSuicide");
-                    return false;
-                }
-                return true;
-            }
-            
+           
             // Check storage containers and doors for locks
             if (ruleSet.HasFlag(RuleFlags.LockedBoxesImmortal) && entity is StorageContainer || ruleSet.HasFlag(RuleFlags.LockedDoorsImmortal) && entity is Door)
             {
@@ -1048,9 +1060,17 @@ namespace Oxide.Plugins
                 if (trace) Trace("Initiator empty; allow and return", 1);
                 return true;
             }
+            
+            // handle suicide
+            if (ruleSet.HasFlag(RuleFlags.SuicideBlocked) && hitInfo.damageTypes.Has(DamageType.Suicide) && !entity.IsNpc && entity is BasePlayer)
+            {
+                if (trace) Trace("DamageType is suicide, with SuicideBlocked flag; block and return", 1);
+                SendMessage(entity as BasePlayer, "Error_NoSuicide");
+                return false;
+            }
 
             // allow players to hurt themselves
-            if (ruleSet.HasFlag(RuleFlags.SelfDamage) && hitInfo.Initiator == entity && entity is BasePlayer)
+            if (ruleSet.HasFlag(RuleFlags.SelfDamage) && !entity.IsNpc && hitInfo.Initiator == entity && entity is BasePlayer)
             {
                 if (trace) Trace($"SelfDamage flag; player inflicted damage to self; allow and return", 1);
                 return true;
@@ -1270,7 +1290,7 @@ namespace Oxide.Plugins
             return null;
         }
 
-        private object OnSamSiteTarget(SamSite samSite, BaseMountable m)
+        private object OnSamSiteTarget(SamSite ss, BaseMountable m)
         {
             var player = GetMountedPlayer(m);
 
@@ -1279,7 +1299,7 @@ namespace Oxide.Plugins
                 return null;
             }
 
-            object extCanEntityBeTargeted = Interface.CallHook("CanEntityBeTargeted", new object[] { player, samSite });
+            object extCanEntityBeTargeted = Interface.CallHook("CanEntityBeTargeted", new object[] { player, ss });
 
             if (extCanEntityBeTargeted is bool)
             {
@@ -1288,10 +1308,11 @@ namespace Oxide.Plugins
                     return null;
                 }
 
+				ss.CancelInvoke(ss.WeaponTick);
                 return false;
             }
 
-            RuleSet ruleSet = GetRuleSet(player, samSite);
+            RuleSet ruleSet = GetRuleSet(player, ss);
 
             if (ruleSet == null)
             {
@@ -1301,11 +1322,12 @@ namespace Oxide.Plugins
             if (ruleSet.HasFlag(RuleFlags.SamSitesIgnorePlayers))
             {
                 var entityLocations = GetLocationKeys(m);
-                var initiatorLocations = GetLocationKeys(samSite);
+                var initiatorLocations = GetLocationKeys(ss);
                 // check for exclusion zones (zones with no rules mapped)
                 if (CheckExclusion(entityLocations, initiatorLocations, false)) return null;
                 // check for exclusions in entity groups
-                if (CheckExclusion(player, samSite)) return null;
+                if (CheckExclusion(player, ss)) return null;
+                ss.CancelInvoke(ss.WeaponTick);
                 return false;
             }
 

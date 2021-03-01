@@ -42,6 +42,8 @@ namespace Oxide.Plugins
         private Dictionary<ulong, StoryCreator> ActiveEditors = new Dictionary<ulong, StoryCreator>();
 
         private Dictionary<StoryType, List<string>> AllObjectives = new Dictionary<StoryType, List<string>>();
+        private List<NPCInfo> AllNPCs = new List<NPCInfo>();
+
         private Dictionary<uint, Dictionary<ulong, int>> HeliAttackers = new Dictionary<uint, Dictionary<ulong, int>>();
 
         private Dictionary<ulong, List<string>> OpenUI = new Dictionary<ulong, List<string>>();
@@ -517,12 +519,6 @@ namespace Oxide.Plugins
                     return;
                 case 3:
                     {
-                        if (Creator.type == StoryType.Walk)
-                        {
-                            //TODO
-
-                            return;
-                        }
                         StoryEnt.Description = args;
                         SendMSG(player, args, LA("Desc", player.UserIDString));
                         Creator.partNum++;
@@ -532,39 +528,32 @@ namespace Oxide.Plugins
                     }
                     return;
                 case 5:
-                    {
-                        if (Creator.type == StoryType.Walk)
+                    { 
+                        int amount;
+                        if (!int.TryParse(arg[0], out amount))
                         {
-                            //TODO
+                            SendMSG(player, LA("noRA", player.UserIDString), LA("QC", player.UserIDString));
+                            return;
                         }
-                        else
+                        Creator.item.Amount = amount;
+                        StoryEnt.Rewards.Add(Creator.item);
+                        Creator.item = new RewardItem();
+                        SendMSG(player, args, LA("RA", player.UserIDString));
+                        Creator.partNum++;
+                        if (isCreating)
+                            StoryHelp(player, 7);
+                        else if (isEditing)
                         {
-                            int amount;
-                            if (!int.TryParse(arg[0], out amount))
-                            {
-                                SendMSG(player, LA("noRA", player.UserIDString), LA("QC", player.UserIDString));
-                                return;
-                            }
-                            Creator.item.Amount = amount;
-                            StoryEnt.Rewards.Add(Creator.item);
-                            Creator.item = new RewardItem();
-                            SendMSG(player, args, LA("RA", player.UserIDString));
-                            Creator.partNum++;
-                            if (isCreating)
-                                StoryHelp(player, 7);
-                            else if (isEditing)
-                            {
-                                SaveRewardsEdit(player);
-                            }
+                            SaveRewardsEdit(player);
                         }
                         return;
                     }
-                case 6:
+                /*case 6:
                     {
                         //TODO: Adding npc to the story mission
                         StoryHelp(player, 6);
                     }
-                    return;
+                    return;*/
                 default:
                     break;
             }
@@ -589,6 +578,7 @@ namespace Oxide.Plugins
             GetAllItems();
             GetAllKillables();
             GetAllResources();
+            GetAllNPCs();
             foreach (var category in AllObjectives)
                 category.Value.Sort();
 
@@ -613,6 +603,33 @@ namespace Oxide.Plugins
             foreach (var bp in ItemManager.bpList)
                 if (bp.userCraftable)
                     AllObjectives[StoryType.Craft].Add(bp.targetItem.shortname);
+        }
+        private void GetAllNPCs()
+        {
+            var result = HumanNPC.Call("ListAllNPC");
+            List<BasePlayer> listAllNPCs = (List<BasePlayer>)result;
+
+            if(listAllNPCs.Any() && listAllNPCs != null)
+            {
+                AllNPCs.Clear();
+                foreach (BasePlayer npcPlayer in listAllNPCs)
+                {
+                    if(npcPlayer != null)
+                    {
+                        NPCInfo npcInfo = new NPCInfo();
+                        npcInfo.ID = npcPlayer.UserIDString;
+                        npcInfo.Name = npcPlayer.displayName;
+                        npcInfo.x = npcPlayer.transform.position.x;
+                        npcInfo.z = npcPlayer.transform.position.y;
+                        AllNPCs.Add(npcInfo);
+                    }
+
+                }
+            }
+            else
+            {
+                Puts("Couldn't load all npcs.");
+            }
         }
         private void GetAllResources()
         {
@@ -1075,7 +1092,7 @@ namespace Oxide.Plugins
         {
             var MenuElement = QUI.CreateElementContainer(UIMain, QUI.Color(configData.Colors.Background_Dark.Color, configData.Colors.Background_Dark.Alpha), "0 0", "0.12 1");
             QUI.CreatePanel(ref MenuElement, UIMain, QUI.Color(configData.Colors.Background_Light.Color, configData.Colors.Background_Light.Alpha), "0.05 0.01", "0.95 0.99", true);
-            QUI.CreateLabel(ref MenuElement, UIMain, "", $"{textPrimary}Quests</color>", 30, "0.05 0.9", "0.95 1");
+            QUI.CreateLabel(ref MenuElement, UIMain, "", $"{textPrimary}Story</color>", 30, "0.05 0.9", "0.95 1");
             int i = 0;
             CreateMenuButton(ref MenuElement, UIMain, LA("Your Quests", player.UserIDString), "QUI_ChangeElement personal", i); i++;
 
@@ -1093,7 +1110,7 @@ namespace Oxide.Plugins
         {
             var MenuElement = QUI.CreateElementContainer(UIMain, QUI.Color(configData.Colors.Background_Dark.Color, configData.Colors.Background_Dark.Alpha), "0 0", "0.12 1");
             QUI.CreatePanel(ref MenuElement, UIMain, QUI.Color(configData.Colors.Background_Light.Color, configData.Colors.Background_Light.Alpha), "0.05 0.01", "0.95 0.99", true);
-            QUI.CreateLabel(ref MenuElement, UIMain, "", $"{textPrimary}Quests</color>", 30, "0.05 0.9", "0.95 1");
+            QUI.CreateLabel(ref MenuElement, UIMain, "", $"{textPrimary}Story</color>", 30, "0.05 0.9", "0.95 1");
             CreateMenuButton(ref MenuElement, UIMain, LA("Your Quests", player.UserIDString), "QUI_ChangeElement personal", 4);
 
             QUI.CreateButton(ref MenuElement, UIMain, QUI.Color(configData.Colors.Button_Standard.Color, configData.Colors.Button_Standard.Alpha), LA("Close", player.UserIDString), 18, "0.1 0.03", "0.9 0.085", "QUI_DestroyAll");
@@ -1348,19 +1365,11 @@ namespace Oxide.Plugins
             QUI.CreateLabel(ref Main, UIPanel, "1 1 1 0.025", LA("CREATOR", player.UserIDString), 200, "0.01 0.01", "0.99 0.99");
             if (HumanNPC)
             {
-                //placeholder:
-                CreateNewQuestButton(ref Main, UIPanel, LA("Kill", player.UserIDString), "QUI_DestroyAll", i); i++;
-                CreateNewQuestButton(ref Main, UIPanel, LA("Gather", player.UserIDString), "QUI_DestroyAll", i); i++;
-                CreateNewQuestButton(ref Main, UIPanel, LA("Loot", player.UserIDString), "QUI_DestroyAll", i); i++;
-                CreateNewQuestButton(ref Main, UIPanel, LA("Craft", player.UserIDString), "QUI_DestroyAll", i); i++;
-                CreateNewQuestButton(ref Main, UIPanel, LA("Walking", player.UserIDString), "QUI_DestroyAll", i); i++;
-                //
-
-                /*CreateNewQuestButton(ref Main, UIPanel, LA("Kill", player.UserIDString), "QUI_NewQuest kill", i); i++;
+                CreateNewQuestButton(ref Main, UIPanel, LA("Kill", player.UserIDString), "QUI_NewQuest kill", i); i++;
                 CreateNewQuestButton(ref Main, UIPanel, LA("Gather", player.UserIDString), "QUI_NewQuest gather", i); i++;
                 CreateNewQuestButton(ref Main, UIPanel, LA("Loot", player.UserIDString), "QUI_NewQuest loot", i); i++;
                 CreateNewQuestButton(ref Main, UIPanel, LA("Craft", player.UserIDString), "QUI_NewQuest craft", i); i++;
-                CreateNewQuestButton(ref Main, UIPanel, LA("Walking", player.UserIDString), "QUI_NewQuest walk", i); i++;*/
+                CreateNewQuestButton(ref Main, UIPanel, LA("Walking", player.UserIDString), "QUI_NewQuest walk", i); i++;
             }
             CuiHelper.AddUi(player, Main);
         }
@@ -1381,20 +1390,8 @@ namespace Oxide.Plugins
             switch (page)
             {
                 case 0:
-                    //placeholder
-                    if (player == null)
-                        return;
-                    if (StatsMenu.Contains(player.userID))
-                        StatsMenu.Remove(player.userID);
-                    if (ActiveCreations.ContainsKey(player.userID))
-                        ActiveCreations.Remove(player.userID);
-                    if (ActiveEditors.ContainsKey(player.userID))
-                        ActiveEditors.Remove(player.userID);
-                    if (OpenMenuBind.Contains(player.userID))
-                        OpenMenuBind.Remove(player.userID);
-                    DestroyUI(player);
-                    player.ChatMessage("Beta, noch nicht fertig.");
-                    //QUI.CreateLabel(ref HelpMain, UIPanel, "", $"{textPrimary}{LA("creHelMen", player.UserIDString)}.\n</color> {textSecondary}{LA("creHelFol", player.UserIDString)}.\n\n{LA("creHelExi", player.UserIDString)} </color>{textPrimary}'exit'\n\n\n\n{LA("creHelName", player.UserIDString)}</color>", 20, "0 0", "1 1");
+
+                    QUI.CreateLabel(ref HelpMain, UIPanel, "", $"{textPrimary}{LA("creHelMen", player.UserIDString)}.\n</color> {textSecondary}{LA("creHelFol", player.UserIDString)}.\n\n{LA("creHelExi", player.UserIDString)} </color>{textPrimary}'exit'\n\n\n\n{LA("creHelName", player.UserIDString)}</color>", 20, "0 0", "1 1");
                     break;
                 case 1:
                     var MenuMain = QUI.CreateElementContainer(UIMain, QUI.Color(configData.Colors.Background_Dark.Color, configData.Colors.Background_Dark.Alpha), "0 0", "1 1", true);
@@ -1426,7 +1423,7 @@ namespace Oxide.Plugins
                     {
                         HelpMain = QUI.CreateElementContainer(UIPanel, QUI.Color(configData.Colors.Background_Dark.Color, configData.Colors.Background_Dark.Alpha), "0.3 0.8", "0.7 0.97");
                         QUI.CreatePanel(ref HelpMain, UIPanel, QUI.Color(configData.Colors.Background_Light.Color, configData.Colors.Background_Light.Alpha), "0.01 0.02", "0.99 0.98");
-                        QUI.CreateLabel(ref HelpMain, UIPanel, "", $"{textPrimary}{LA("creHelIH", player.UserIDString)} 'quest item'</color>", 20, "0.1 0", "0.9 1");
+                        QUI.CreateLabel(ref HelpMain, UIPanel, "", $"{textPrimary}{LA("creHelIH", player.UserIDString)} 'story item'</color>", 20, "0.1 0", "0.9 1");
                     }
                     break;
                 case 7:
@@ -1447,10 +1444,12 @@ namespace Oxide.Plugins
                     }
                     else { StoryHelp(player, 9); return; }
                     break;
-                case 9:
+                case 9: // Creating the NPC
                     HelpMain = QUI.CreateElementContainer(UIPanel, QUI.Color(configData.Colors.Background_Dark.Color, configData.Colors.Background_Dark.Alpha), "0.3 0.8", "0.7 0.97");
                     QUI.CreatePanel(ref HelpMain, UIPanel, QUI.Color(configData.Colors.Background_Light.Color, configData.Colors.Background_Light.Alpha), "0.01 0.02", "0.99 0.98");
-                    QUI.CreateLabel(ref HelpMain, UIPanel, "", $"{textPrimary}{LA("creHelCD", player.UserIDString)}</color>", 20, "0.1 0", "0.9 1");
+                    QUI.CreateLabel(ref HelpMain, UIMain, "", $"{textPrimary}{LA("delHelNewNPC", player.UserIDString)}</color>", 20, "0.25 0.85", "0.75 0.95");
+
+                    CreateNPCMenu(player);
                     break;
                 case 10:
                     {
@@ -1521,6 +1520,36 @@ namespace Oxide.Plugins
                 i++;
             }
             CuiHelper.AddUi(player, HelpMain);
+        }
+        private void CreateNPCMenu(BasePlayer player, int page = 0)
+        {
+            /*DestroyEntries(player);
+            var HelpMain = QUI.CreateElementContainer(UIPanel, "0 0 0 0", "0 0", "1 1");
+            StoryType type;
+            if (ActiveCreations.ContainsKey(player.userID))
+                type = ActiveCreations[player.userID].;
+            else type = ActiveEditors[player.userID].type;
+            var objCount = AllObjectives[type].Count;
+            if (objCount > 100)
+            {
+                var maxpages = (objCount - 1) / 96 + 1;
+                if (page < maxpages - 1)
+                    QUI.CreateButton(ref HelpMain, UIPanel, QUI.Color(configData.Colors.Button_Standard.Color, configData.Colors.Button_Standard.Alpha), LA("Next", player.UserIDString), 18, "0.84 0.05", "0.97 0.1", $"QUI_ChangeElement objpage {page + 1}");
+                if (page > 0)
+                    QUI.CreateButton(ref HelpMain, UIPanel, QUI.Color(configData.Colors.Button_Standard.Color, configData.Colors.Button_Standard.Alpha), LA("Back", player.UserIDString), 18, "0.03 0.05", "0.16 0.1", $"QUI_ChangeElement objpage {page - 1}");
+            }
+            int maxentries = (96 * (page + 1));
+            if (maxentries > objCount)
+                maxentries = objCount;
+            int rewardcount = 96 * page;
+
+            int i = 0;
+            for (int n = rewardcount; n < maxentries; n++)
+            {
+                CreateObjectiveEntry(ref HelpMain, UIPanel, AllObjectives[type][n], i);
+                i++;
+            }
+            CuiHelper.AddUi(player, HelpMain);*/
         }
         //TODO:
         private void AcceptStory(BasePlayer player, string npcID, int page = 0)
@@ -1844,6 +1873,18 @@ namespace Oxide.Plugins
         }
         #endregion
 
+        #region Test
+        [ConsoleCommand("test12345")]
+        private void cmdTest12345(ConsoleSystem.Arg arg)
+        {
+            foreach (NPCInfo npcInfo in AllNPCs)
+            {
+                Puts("NPC Name: " + npcInfo.Name);
+            }
+        }
+
+        #endregion
+
         #region UI Commands
         [ConsoleCommand("QUI_AcceptQuest")]
         private void cmdAcceptQuest(ConsoleSystem.Arg arg)
@@ -2022,7 +2063,16 @@ namespace Oxide.Plugins
                 Creator.partNum++;
                 DestroyUI(player);
 
-                StoryHelp(player, 2);
+                if(questItem.ToLower() == "walk")
+                {
+                    Creator.partNum++;
+                    StoryHelp(player, 3); // skip selecting amount because just a walk-quest
+                }
+                else
+                {
+                    StoryHelp(player, 2); // amount etc.
+                }
+                
             }
         }
         [ConsoleCommand("QUI_RewardType")]
@@ -2461,76 +2511,94 @@ namespace Oxide.Plugins
                 if (args.Length >= 1)
                     name = string.Join(" ", args);
 
-                if (AddVendor.ContainsKey(player.userID))
+
+                bool isEditing = false;
+                bool isCreating = false;
+                StoryCreator Creator = new StoryCreator();
+                StoryEntry Quest = new StoryEntry();
+
+                if (ActiveEditors.ContainsKey(player.userID))
                 {
-                    var pos = new NPCInfo { x = NPC.transform.position.x, z = NPC.transform.position.z, ID = NPC.UserIDString };
+                    isEditing = true;
+                    Creator = ActiveEditors[player.userID];
+                    Quest = Creator.entry;
+                }
+                else if (ActiveCreations.ContainsKey(player.userID))
+                {
+                    isCreating = true;
+                    Creator = ActiveCreations[player.userID];
+                    Quest = Creator.entry;
+                }
+                if (!isEditing && !isCreating)
+                    return;
 
-                    Puts("cmdQuestNPC oben drin.");
+                var pos = new NPCInfo { x = NPC.transform.position.x, z = NPC.transform.position.z, ID = NPC.UserIDString };
 
-                    if (AddVendor.ContainsKey((1 + player.userID)))
+                Puts("cmdQuestNPC oben drin.");
+
+                if (AddVendor.ContainsKey((1 + player.userID)))
+                {
+
+                    Puts("cmdQuestNPC mit Story funzt.");
+
+                    if (string.IsNullOrEmpty(name))
+                        name = $"Story_{ vendors.StoryVendors.Count + 1}";
+
+                    if (ActiveCreations.ContainsKey(player.userID))
+                        ActiveCreations.Remove(player.userID);
+                    pos.Name = name;
+
+                    ActiveCreations.Add(player.userID, new QuestCreator
                     {
-
-                        Puts("cmdQuestNPC mit Story funzt.");
-
-                        if (string.IsNullOrEmpty(name))
-                            name = $"Story_{ vendors.StoryVendors.Count + 1}";
-
-                        if (ActiveCreations.ContainsKey(player.userID))
-                            ActiveCreations.Remove(player.userID);
-                        pos.Name = name;
-
-                        ActiveCreations.Add(player.userID, new QuestCreator
+                        storyInfo = new StoryInfo
                         {
-                            storyInfo = new StoryInfo
-                            {
-                                Info = pos,
-                                Reward = new RewardItem()
-                            },
-                            partNum = 4,
-                            type = QuestType.Story
-                        });
-                        StoryHelp(player, 2);
-                        return;
-                    }
+                            Info = pos,
+                            Reward = new RewardItem()
+                        },
+                        partNum = 4,
+                        type = QuestType.Story
+                    });
+                    StoryHelp(player, 2);
+                    return;
+                }
 
 
-                    if (AddVendor[player.userID])
+                if (AddVendor[player.userID])
+                {
+                    pos.Name = $"QuestVendor_{vendors.QuestVendors.Count + 1}";
+                    vendors.QuestVendors.Add(NPC.UserIDString, pos);
+                    SendMSG(player, LA("newVSucc", player.UserIDString), LA("Quest NPCs:", player.UserIDString));
+                    if (NPC != null)
                     {
-                        pos.Name = $"QuestVendor_{vendors.QuestVendors.Count + 1}";
-                        vendors.QuestVendors.Add(NPC.UserIDString, pos);
-                        SendMSG(player, LA("newVSucc", player.UserIDString), LA("Quest NPCs:", player.UserIDString));
-                        if (NPC != null)
-                        {
-                            NPC.displayName = pos.Name;
-                            NPC.UpdateNetworkGroup();
-                        }
-                        AddVendor.Remove(player.userID);
-                        SaveVendorData();
-                        DestroyUI(player);
-                        OpenMap(player);
-                        return;
+                        NPC.displayName = pos.Name;
+                        NPC.UpdateNetworkGroup();
                     }
-                    else
+                    AddVendor.Remove(player.userID);
+                    SaveVendorData();
+                    DestroyUI(player);
+                    OpenMap(player);
+                    return;
+                }
+                else
+                {
+                    if (string.IsNullOrEmpty(name))
+                        name = $"Delivery_{ vendors.DeliveryVendors.Count + 1}";
+
+                    if (ActiveCreations.ContainsKey(player.userID))
+                        ActiveCreations.Remove(player.userID);
+                    pos.Name = name;
+
+                    ActiveCreations.Add(player.userID, new QuestCreator
                     {
-                        if (string.IsNullOrEmpty(name))
-                            name = $"Delivery_{ vendors.DeliveryVendors.Count + 1}";
-
-                        if (ActiveCreations.ContainsKey(player.userID))
-                            ActiveCreations.Remove(player.userID);
-                        pos.Name = name;
-
-                        ActiveCreations.Add(player.userID, new QuestCreator
+                        deliveryInfo = new DeliveryInfo
                         {
-                            deliveryInfo = new DeliveryInfo
-                            {
-                                Info = pos,
-                                Reward = new RewardItem()
-                            },
-                            partNum = 4,
-                            type = QuestType.Delivery
-                        });
-                        DeliveryHelp(player, 2);
-                    }
+                            Info = pos,
+                            Reward = new RewardItem()
+                        },
+                        partNum = 4,
+                        type = QuestType.Delivery
+                    });
+                    DeliveryHelp(player, 2);
                 }
             }
             else SendMSG(player, LA("noNPC", player.UserIDString));
@@ -2820,7 +2888,7 @@ namespace Oxide.Plugins
             { "Quest Vendor", "Quest Vendor" },
             { "Delivery Vendor", "Delivery Vendor" },
             { "storyHelNewNPC", "Stand infront of the NPC you wish to add the story and type" },
-            { "delHelNewNPC", "Stand infront of the NPC you wish to add and type" },
+            { "delHelNewNPC", "Choose a NPC from the list" },
             { "delHelMult", "Delivery mission rewards are based on distance X a multiplier. Keep this in mind when selecting a reward." },
             { "delHelRM", "Enter a reward multiplier (per unit)." },
             { "delHelRM1", "For example, if a delivery is" },

@@ -290,9 +290,12 @@
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="src\DronePilot.cs" />
     <Compile Include="src\DroneTrading.cs" />
+    <Compile Include="src\HumanNPC.cs" />
+    <Compile Include="src\OnScreenLogo.cs" />
     <Compile Include="src\Quests.cs" />
     <Compile Include="src\Story.cs" />
     <Compile Include="src\test.cs" />
+    <Compile Include="src\TruePVE.cs" />
     <Compile Include="src\VehicleLicence.cs" />
   </ItemGroup>
   <ItemGroup>
