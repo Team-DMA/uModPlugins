@@ -4,6 +4,7 @@ using System;
 using System.Collections;
 using System.IO;
 using UnityEngine;
+using UnityEngine.Networking;
 
 namespace Oxide.Plugins
 {
@@ -104,17 +105,17 @@ namespace Oxide.Plugins
         }
         IEnumerator DownloadImage(string url)
         {
-            using (var www = new WWW(url))
+            using (UnityWebRequest uwr = UnityWebRequestTexture.GetTexture(url))
             {
-                yield return www;
+                yield return uwr.SendWebRequest();
                 if (instance == null) yield break;
-                if (www.error != null)
+                if (uwr.isNetworkError || uwr.isHttpError)
                 {
                     PrintError($"Failed to add image. File address possibly invalide\n {url}");
                 }
                 else
                 {
-                    var tex = www.texture;
+                    var tex = DownloadHandlerTexture.GetContent(uwr);
                     byte[] bytes = tex.EncodeToPNG();
                     Image = FileStorage.server.Store(bytes, FileStorage.Type.png, CommunityEntity.ServerInstance.net.ID).ToString();
                     SaveData();

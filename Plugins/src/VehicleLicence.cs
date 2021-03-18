@@ -1300,7 +1300,7 @@ namespace Oxide.Plugins
                 Print(player, reason);
                 return;
             }
-            BuyVehicle(player, vehicleType); //buy
+            BuyVehicle(player, vehicleType, false); //buy
         }
 
         #endregion Universal Command
@@ -1456,7 +1456,7 @@ namespace Oxide.Plugins
                     {
                         if (entry.Value.purchasePrices.Count > 0)
                         {
-                            var prices = string.Join(", ", from p in entry.Value.purchasePrices select $"<color=#FF1919>{p.Value.displayName}</color> x{p.Value.amount}");
+                            var prices = string.Join(", ", from p in entry.Value.purchasePrices select $"{p.Value.amount} <color=#FF1919>{p.Value.displayName}</color>");
                             stringBuilder.AppendLine(Lang("HelpBuyPrice", player.UserIDString, configData.chatS.buyCommand, entry.Value.commands[0], entry.Value.displayName, prices));
                         }
                         else
@@ -1469,22 +1469,41 @@ namespace Oxide.Plugins
                 return;
             }
             if (PlayerIsBlocked(player)) return;
-            HandleBuyCmd(player, args[0].ToLower());
+            HandleBuyCmd(player, args[0].ToLower(), false);
         }
 
-        private void HandleBuyCmd(BasePlayer player, string option)
+        private void HandleBuyCmd(BasePlayer player, string option, bool talkingNpcs)
         {
             string vehicleType;
             if (IsValidOption(player, option, out vehicleType))
             {
-                BuyVehicle(player, vehicleType);
+                BuyVehicle(player, vehicleType, talkingNpcs);
+            }
+        }
+        private bool AlreadyHasVehicle(BasePlayer player, string vehicleType)
+        {
+            var baseVehicleS = GetBaseVehicleS(vehicleType);
+            Dictionary<string, Vehicle> vehicles;
+            if (!storedData.playerData.TryGetValue(player.userID, out vehicles))
+            {
+                vehicles = new Dictionary<string, Vehicle>();
+                storedData.playerData.Add(player.userID, vehicles);
+            }
+            if (vehicles.ContainsKey(vehicleType))
+            {
+                //Print(player, Lang("VehicleAlreadyPurchased", player.UserIDString, baseVehicleS.displayName));
+                return true;
+            }
+            else
+            {
+                return false;
             }
         }
 
-        private bool BuyVehicle(BasePlayer player, string vehicleType)
+        private bool BuyVehicle(BasePlayer player, string vehicleType, bool talkingNpcs)
         {
             var baseVehicleS = GetBaseVehicleS(vehicleType);
-            if (!baseVehicleS.purchasable)
+            if (!baseVehicleS.purchasable && talkingNpcs == false)
             {
                 Print(player, Lang("VehicleCannotBeBought", player.UserIDString, baseVehicleS.displayName));
                 return false;
@@ -1501,7 +1520,7 @@ namespace Oxide.Plugins
                 return false;
             }
             string missingResources;
-            if (baseVehicleS.purchasePrices.Count > 0 && !TryPay(player, baseVehicleS.purchasePrices, out missingResources))
+            if (baseVehicleS.purchasePrices.Count > 0 && !TryPay(player, baseVehicleS.purchasePrices, out missingResources) && talkingNpcs == false)
             {
                 Print(player, Lang("NoResourcesToPurchaseVehicle", player.UserIDString, baseVehicleS.displayName, missingResources));
                 return false;
@@ -1537,11 +1556,11 @@ namespace Oxide.Plugins
                 stringBuilder.AppendLine(Lang("Help", player.UserIDString));
                 foreach (var entry in allBaseVehicleSettings)
                 {
-                    if (CanViewVehicleInfo(player, entry.Key, entry.Value))
+                    if (CanViewVehicleInfo(player, entry.Key, entry.Value) || (entry.Value.usePermission == false && entry.Value.purchasable == false))
                     {
                         if (entry.Value.spawnPrices.Count > 0)
                         {
-                            var prices = string.Join(", ", from p in entry.Value.spawnPrices select $"<color=#FF1919>{p.Value.displayName}</color> x{p.Value.amount}");
+                            var prices = string.Join(", ", from p in entry.Value.spawnPrices select $"{p.Value.amount} <color=#FF1919>{p.Value.displayName}</color>");
                             stringBuilder.AppendLine(Lang("HelpSpawnPrice", player.UserIDString, configData.chatS.spawnCommand, entry.Value.commands[0], entry.Value.displayName, prices));
                         }
                         else
@@ -1776,11 +1795,11 @@ namespace Oxide.Plugins
                 stringBuilder.AppendLine(Lang("Help", player.UserIDString));
                 foreach (var entry in allBaseVehicleSettings)
                 {
-                    if (CanViewVehicleInfo(player, entry.Key, entry.Value))
+                    if (CanViewVehicleInfo(player, entry.Key, entry.Value) || (entry.Value.usePermission == false && entry.Value.purchasable == false))
                     {
                         if (entry.Value.recallPrices.Count > 0)
                         {
-                            var prices = string.Join(", ", from p in entry.Value.recallPrices select $"<color=#FF1919>{p.Value.displayName}</color> x{p.Value.amount}");
+                            var prices = string.Join(", ", from p in entry.Value.recallPrices select $"{p.Value.amount} <color=#FF1919>{p.Value.displayName}</color>");
                             stringBuilder.AppendLine(Lang("HelpRecallPrice", player.UserIDString, configData.chatS.recallCommand, entry.Value.commands[0], entry.Value.displayName, prices));
                         }
                         else
@@ -1959,7 +1978,7 @@ namespace Oxide.Plugins
                 stringBuilder.AppendLine(Lang("Help", player.UserIDString));
                 foreach (var entry in allBaseVehicleSettings)
                 {
-                    if (CanViewVehicleInfo(player, entry.Key, entry.Value))
+                    if (CanViewVehicleInfo(player, entry.Key, entry.Value) || (entry.Value.usePermission == false && entry.Value.purchasable == false))
                     {
                         stringBuilder.AppendLine(Lang("HelpKill", player.UserIDString, configData.chatS.killCommand, entry.Value.commands[0], entry.Value.displayName));
                     }

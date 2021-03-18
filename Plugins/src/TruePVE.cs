@@ -39,6 +39,21 @@ namespace Oxide.Plugins
         private string linkImagePvp = "https://i.imgur.com/M8Z9gkN.png";
         //
 
+        //BuildingBlocker
+        List<uint> BlockedConstructionWhilePVE = new List<uint>()
+        {
+            2150203378,
+            72949757,
+            2194854973,
+            916411076,
+            3234260181,
+            2925153068,
+            1886694238,
+            372561515,
+            995542180,
+            870964632,
+            3895720527
+        };
 
         // config/data container
         private TruePVEData data = new TruePVEData();
@@ -215,6 +230,9 @@ namespace Oxide.Plugins
                 DestroyGUI(player);
             }
             //
+
+            //BuildingBlocker
+            AllowBuildingBypass(true);
 
             Instance = null;
         }
@@ -957,7 +975,18 @@ namespace Oxide.Plugins
 
             return handleDamage;
         }
-
+        //BuildingBlocker
+        private void AllowBuildingBypass(bool allow)
+        {
+            if (BlockedConstructionWhilePVE.Count > 0)
+            {
+                foreach (uint conID in BlockedConstructionWhilePVE)
+                {
+                    Construction con = PrefabAttribute.server.Find<Construction>(conID);
+                    if (con) con.canBypassBuildingPermission = allow;
+                }
+            }
+        }
         private bool AllowKillingSleepers(BaseCombatEntity entity)
         {
             return data.AllowKillingSleepers && entity is BasePlayer && entity.ToPlayer().IsSleeping();
@@ -1779,10 +1808,15 @@ namespace Oxide.Plugins
                         if (currentRuleSet.name == "default")
                         {
                             CreateUI(player, false);
+                            //BuildingBlocker
+                            AllowBuildingBypass(false);
+
                         }
                         else if (currentRuleSet.name == "raid")
                         {
                             CreateUI(player, true);
+                            //BuildingBlocker
+                            AllowBuildingBypass(true);
                         }
                     }
                     //
